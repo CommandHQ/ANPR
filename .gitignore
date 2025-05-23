@@ -7,12 +7,7 @@ event.json
 test.ipynb
 Dockerfile
 .dockerignore
+.DS_Store
 
 
 
-$ eval "$(ssh-agent -s)"                                                        
-ssh-add --apple-use-keychain ~/.ssh/id_ed25519_work
-
-ssh -T git@github-work  
-
- git remote set-url origin git@github.com-commandhq:CommandHQ/chat_with_sql.git
