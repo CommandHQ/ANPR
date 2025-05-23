@@ -1,47 +1,26 @@
+from ultralytics import YOLO
 import cv2
 import numpy as np
-import onnxruntime as ort
 from typing import Tuple, List, Dict
 from app.services.ocr_service import OCRService
 from app.config.settings import settings
 
 class ImageProcessor:
     def __init__(self):
-        self.session = ort.InferenceSession(settings.MODEL_PATH, providers=['CPUExecutionProvider'])
-        self.input_name = self.session.get_inputs()[0].name
-        self.output_names = [output.name for output in self.session.get_outputs()]
+        self.model = YOLO(settings.MODEL_PATH)
         self.confidence_threshold = settings.CONFIDENCE_THRESHOLD
         self.ocr_service = OCRService()
-        self.input_size = (640, 640)  # Adjust based on training
-
-    def preprocess_input(self, image: np.ndarray) -> np.ndarray:
-        resized = cv2.resize(image, self.input_size)
-        img = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-        img = img.transpose(2, 0, 1).astype(np.float32) / 255.0
-        return np.expand_dims(img, axis=0)
-
-    def postprocess_output(self, output, original_shape) -> List[Dict]:
-        detections = []
-        boxes = output[0]
-        height, width = original_shape[:2]
-
-        for box in boxes:
-            x1, y1, x2, y2, score, class_id = box[:6]
-            if score > self.confidence_threshold:
-                x1 = int(x1 / self.input_size[0] * width)
-                y1 = int(y1 / self.input_size[1] * height)
-                x2 = int(x2 / self.input_size[0] * width)
-                y2 = int(y2 / self.input_size[1] * height)
-                detections.append({
-                    'bbox': [x1, y1, x2, y2],
-                    'confidence': float(score)
-                })
-        return detections
 
     def detect_license_plates(self, image: np.ndarray) -> Tuple[List[Dict], np.ndarray]:
-        input_tensor = self.preprocess_input(image)
-        outputs = self.session.run(self.output_names, {self.input_name: input_tensor})
-        detections = self.postprocess_output(outputs, image.shape)
+        results = self.model(image, conf=self.confidence_threshold)
+        detections = []
+        for result in results:
+            boxes = result.boxes
+            if boxes is not None:
+                for box in boxes:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
+                    confidence = float(box.conf[0].cpu().numpy())
+                    detections.append({'bbox': [x1, y1, x2, y2], 'confidence': confidence})
         return detections, image
 
     def preprocess_license_plate(self, image: np.ndarray) -> Tuple[np.ndarray, List]:
@@ -90,6 +69,5 @@ class ImageProcessor:
                 'detections_count': len(detections),
                 'results': results
             }
-
         except Exception as e:
             raise RuntimeError(f"Image processing failed: {str(e)}")
