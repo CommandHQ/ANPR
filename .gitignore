@@ -1,0 +1,9 @@
+# .gitignore
+.env
+.venv/
+__pycache__/
+*.pyc
+event.json
+test.ipynb
+Dockerfile
+.dockerignore
