@@ -8,6 +8,7 @@ from app.utils.image_utils import decode_base64_image, fetch_image_from_url
 from app.utils.logger import logger
 import cv2
 import numpy as np
+import gc
 
 app = FastAPI(
     title="Indian License Plate OCR API",
@@ -43,13 +44,19 @@ async def process_image(request: ImageRequest):
         result = image_processor.process_image(image)
         logger.info(f"Image processing completed: {result}")
 
+        # Clean up image from memory
+        del image
+        gc.collect()
+
         return OCRResponse(**result)
 
     except ValueError as ve:
         logger.error(f"Validation error: {str(ve)}")
+        gc.collect()
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
+        gc.collect()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/ocr/upload", response_model=OCRResponse)
@@ -65,19 +72,34 @@ async def process_image_upload(file: UploadFile = File(...)):
         if image is None:
             raise ValueError("Failed to decode uploaded image")
 
+        # Clean up contents and array immediately
+        del contents, image_array
+        gc.collect()
+
         # Process the image
         logger.info("Starting image processing")
         result = image_processor.process_image(image)
         logger.info(f"Image processing completed: {result}")
 
+        # Clean up image from memory
+        del image
+        gc.collect()
+
         return OCRResponse(**result)
 
     except ValueError as ve:
         logger.error(f"Validation error: {str(ve)}")
+        gc.collect()
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
+        gc.collect()
         raise HTTPException(status_code=500, detail="Internal server error")
 
-# Create the Lambda handler using Mangum
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint"""
+    return {"status": "healthy", "service": "ANPR OCR API"}
+
+# Create the Lambda handler using Mangum (for AWS Lambda compatibility)
 handler = Mangum(app, lifespan="off")
